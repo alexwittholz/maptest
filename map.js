@@ -1,6 +1,6 @@
 
 
-var TimelineMap = function(container){
+function TimelineMap(container){
 
   var width  = window.innerWidth
   var height = window.innerHeight
@@ -12,22 +12,24 @@ var TimelineMap = function(container){
   var canvas, ctx, rafHook
   var path, title, scale
   var land, countries, borders
+  var timeline
 
   var activeCountry = {}
   var activeCountryIndex = -1
 
   var rotator, rotationProgress, rotationDuration
 
-  var globe = {type: "Sphere"}
-
   queue()
       .defer(d3.json, "world-110m.json")
       .defer(d3.tsv, "world-country-names.tsv")
+      .defer(d3.json, "timeline.json")
       .await(setup)
+
+  return {}
 
   // ********************************************************
 
-  function setup(error, world, names){
+  function setup(error, world, names, timelineData){
     if(error) throw error;
 
     land      = topojson.feature(world, world.objects.land)
@@ -58,6 +60,8 @@ var TimelineMap = function(container){
       return a.name.localeCompare(b.name)
     })
 
+    timeline = new Timeline({ container, events: timelineData.events })
+
     draw()
 
     focusOnCountry('Canada')
@@ -68,13 +72,13 @@ var TimelineMap = function(container){
     rafHook = window.requestAnimationFrame(draw)
     ctx.clearRect(0, 0, width, height)
 
-    // rotate the projection (optionally)
+
+    // rotate the projection (if there's an active rotation tween)
     if(rotationProgress < rotationDuration && rotator){
       rotationProgress += 1
 
-      // ease
-      let value = easeInOutQuart( rotationProgress, 0, 1, rotationDuration )
-      projection.rotate( rotator( value ) )
+      var easedValue = easeInOutQuart( rotationProgress, 0, 1, rotationDuration )
+      projection.rotate( rotator( easedValue ) )
     }
 
     // draw lands
@@ -100,7 +104,7 @@ var TimelineMap = function(container){
     ctx.strokeStyle = "#999"
     ctx.lineWidth = 1
     ctx.beginPath()
-    path(globe)
+    path({ type: "Sphere" })
     ctx.stroke()
   }
 
@@ -198,4 +202,88 @@ var TimelineMap = function(container){
   }
 
 }
+
+
+
+
+
+
+/*
+
+  comment
+
+*/
+function Timeline(options){
+
+  var container = options.container
+  var events = options.events
+
+  var height = 150
+  var width = container.offsetWidth
+  var padding = 20
+
+  var data = {}
+  var dom = {}
+  var svg, scale, line, allEvents
+
+  setup()
+
+  return { resize }
+
+  // ********************************************************
+
+  function setup(){
+
+    var c = d3.select(container)
+
+    dom.svg = c.append('svg')
+      .attr('class', 'timeline')
+
+    // create the scale, which determines the horizontal
+    // position of the years on the line
+    data.scale = d3.scaleLinear()
+
+    // input (real vales)
+    data.scale.domain([ events[0].year, events[events.length-1].year ])
+
+    // output (pixel size)
+    data.scale.range([ padding, width - padding ])
+
+    line = d3.line()
+      .x(function(d){ return data.scale(d.year) })
+      .y(function(d){ return height - padding })
+
+    dom.svg.append('path')
+      .attr('class', 'timeline-line')
+      .datum(events)
+      .attr('d', line)
+
+    // event pins
+    var eventGroup = dom.svg.append('g')
+      .attr('class', 'timeline-events')
+
+    var allEvents = eventGroup.selectAll('g.timeline-event')
+      .data(events)
+
+    allEvents.enter()
+      .append('g')
+        .attr('class', 'timeline-event')
+
+
+    resize()
+
+  }
+
+  function resize(){
+    width = container.offsetWidth
+
+    dom.svg
+      .attr('width',  width)
+      .attr('height', height)
+
+    data.scale.range([ 0, width ])
+  }
+
+}
+
 

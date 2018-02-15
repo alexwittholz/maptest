@@ -1,0 +1,20 @@
+{
+  "events": [
+
+    { "year": 1960, "country": "Canada" },
+    { "year": 1961, "country": "Cuba" },
+    { "year": 1961, "country": "Costa Rica" },
+    { "year": 1962, "country": "Vietnam" },
+    { "year": 1970, "country": "Thailand" },
+    { "year": 1970, "country": "Belgium" },
+    { "year": 1977, "country": "Germany" },
+    { "year": 1982, "country": "France" },
+    { "year": 1984, "country": "Spain" },
+    { "year": 1988, "country": "Libya" },
+    { "year": 1989, "country": "South Africa" },
+    { "year": 1990, "country": "Cuba" },
+    { "year": 1990, "country": "Kazakhstan" },
+    { "year": 2005, "country": "Bolivia" },
+    { "year": 2007, "country": "Finland" }
+  ]
+}
