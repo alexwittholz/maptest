@@ -44,6 +44,17 @@ body {
   position: absolute;
   width: 100vw;
   height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.title {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%,-50%);
+  margin-top: 10vh;
 }
 
 </style>
@@ -52,6 +63,7 @@ body {
   <div class="container"></div>
 
 <script src="//d3js.org/d3.v3.min.js"></script>
+<script src="//d3js.org/queue.v1.min.js"></script>
 <script src="//d3js.org/d3.geo.projection.v0.min.js"></script>
 <script src="//d3js.org/topojson.v1.min.js"></script>
 <script src="map.js"></script>

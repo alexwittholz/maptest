@@ -2,146 +2,200 @@
 
 var TimelineMap = function(container){
 
-  var width = 960
-  var height = 580
+  var width  = window.innerWidth
+  var height = window.innerHeight
 
-  var countryCode = 840 //36: AUSTRALIA * 643: RUSSIA * 76: BRAZIL * 840: USA
-
-  // ********************************************************
-
-  var activeProjection = 'orthographic'
-
-  var svg, projectedPath, graticule
-  var world, countries, boundaries
-  var countryData, neighbourData
-
-  setup()
+  var countryCode = 840 // 36: AUSTRALIA, 643: RUSSIA, 76: BRAZIL, 840: USA
 
   // ********************************************************
 
-  function setup(){
+  var canvas, ctx, rafHook
+  var path, title, scale
+  var land, countries, borders
 
-    d3.json("world-50m.json", function(error, _world) {
-      if(error) throw error;
+  var activeCountry = {}
+  var activeCountryIndex = -1
 
-      world = _world
+  var rotator, rotationProgress, rotationDuration
 
-      countryData   = topojson.feature(world, world.objects.countries).features
-      neighbourData = topojson.neighbors(world.objects.countries.geometries)
+  var globe = {type: "Sphere"}
 
-      svg = d3.select(container).append("svg")
+  queue()
+      .defer(d3.json, "world-110m.json")
+      .defer(d3.tsv, "world-country-names.tsv")
+      .await(setup)
 
-      svg.append("use")
-        .attr("class", "fill")
-        .attr("xlink:href", "#sphere")
+  // ********************************************************
 
-      // Countries
-      allCountries = svg.append('g')
-        .attr('class', 'countries')
+  function setup(error, world, names){
+    if(error) throw error;
 
-      countries = allCountries.selectAll(".country")
-        .data(countryData)
+    land      = topojson.feature(world, world.objects.land)
+    countries = topojson.feature(world, world.objects.countries).features
+    borders   = topojson.mesh(world, world.objects.countries, function(a, b) { return a !== b; })
 
-      countries
-        .enter()
-          .append('path')
-          .attr("class", "country")
+    canvas = d3.select(container).append('canvas')
+    ctx = canvas.node().getContext("2d")
+    projection = d3.geo.orthographic()
 
-      // Boundaries & Graticule
-      var boundaryGroup = svg.append('g')
-        .attr('class', 'boundary')
+    title = d3.select(container)
+      .append('div')
+      .attr('class', 'title')
 
-      graticule = boundaryGroup.append("path")
-        .attr("class", "graticule")
-        .datum( d3.geo.graticule() )
+    path = d3.geo.path()
+      .projection(projection)
+      .context(ctx)
 
-      boundaries = boundaryGroup.insert("path", ".graticule")
-        .datum(topojson.mesh(world, world.objects.countries, function(a, b) { return a !== b; }))
-        .attr("class", "boundary")
+    window.addEventListener('resize', debounce(resize), false)
+    resize()
 
-      window.addEventListener('resize', debounce(resize), false)
-      resize()
-
+    // add names to countries
+    countries = countries.filter(function(d) {
+      return names.some(function(n) {
+        if (d.id == n.id) return d.name = n.name
+      })
+    }).sort(function(a, b) {
+      return a.name.localeCompare(b.name)
     })
 
+    draw()
+
+    focusOnCountry('Canada')
+  }
+
+
+  function draw(){
+    rafHook = window.requestAnimationFrame(draw)
+    ctx.clearRect(0, 0, width, height)
+
+    // rotate the projection (optionally)
+    if(rotationProgress < rotationDuration && rotator){
+      rotationProgress += 1
+
+      // ease
+      let value = easeInOutQuart( rotationProgress, 0, 1, rotationDuration )
+      projection.rotate( rotator( value ) )
+    }
+
+    // draw lands
+    ctx.fillStyle = "#ccc"
+    ctx.beginPath()
+    path(land)
+    ctx.fill()
+
+    // draw the active country in red
+    ctx.fillStyle = "#f00"
+    ctx.beginPath()
+    path(activeCountry)
+    ctx.fill()
+
+    // draw borders
+    ctx.strokeStyle = "#fff"
+    ctx.lineWidth = .5
+    ctx.beginPath()
+    path(borders)
+    ctx.stroke()
+
+    // draw globe outline
+    ctx.strokeStyle = "#999"
+    ctx.lineWidth = 1
+    ctx.beginPath()
+    path(globe)
+    ctx.stroke()
   }
 
   /*
 
-    set/update active projection and globe position
+    Resize the canvas and projection square to fit inside the container
 
   */
-  function drawProjection(){
-
-    projectedPath = d3.geo.path()
-      .projection(buildProjection(activeProjection))
-
-    countries.data(countryData)
-      .style("fill", colorCountry)
-      .attr("d", projectedPath)
-
-    graticule
-      .attr("d", projectedPath)
-
-    boundaries
-      .attr("d", projectedPath)
-
-  }
-
-  function buildProjection(type){
-
-    if( type === 'orthographic' ){
-
-      return d3.geo.orthographic()
-        .scale(240)
-        .translate([width / 2, height / 2])
-        .clipAngle(90)
-        .precision(.1)
-
-    } else if( type === 'mercator' ){
-
-      return d3.geo.mercator()
-        .scale(140)
-        .translate([width / 2, height / 2])
-        .precision(.1);
-
-    }
-
-  }
-
-  function update(){
-
-  }
-
   function resize(){
     width  = container.offsetWidth
     height = container.offsetHeight
 
-    svg.attr("width", width)
-       .attr("height", height)
+    var smallerDimension = width > height ? height : width
 
-    if(world)
-      drawProjection()
+    canvas.attr("width",  smallerDimension)
+          .attr("height", smallerDimension)
+
+    var padding = smallerDimension * 0.025
+    scale = smallerDimension / 2 - padding
+
+    projection
+      .translate([smallerDimension / 2, smallerDimension / 2])
+      .scale(scale)
+      .clipAngle(90)
+      .precision(0.6)
   }
+
+  /*
+
+    Rotate the globe to focus on the specified country index/name
+
+  */
+  function focusOnCountry(input){
+
+    if(typeof input === 'string'){
+      activeCountry = countries.find(function(c){ return c.name === input })
+      if(!activeCountry) throw new Error('No country named "' + input + '" exists')
+      activeCountryIndex = countries.indexOf(activeCountry)
+    } else if( typeof input === 'number' ){
+      activeCountryIndex = input
+      activeCountry = countries[activeCountryIndex]
+    }
+
+    console.log('focus on %s (%i) %O', activeCountry.name, activeCountryIndex, activeCountry)
+
+    // title.text( activeCountry.name  )
+
+    var centroid = d3.geo.centroid(activeCountry)
+
+    rotator = d3.interpolate(projection.rotate(), [-centroid[0], -centroid[1]] )
+    rotationProgress = 0
+    rotationDuration = 90
+
+
+
+
+    // var bounds = path.bounds(activeCountry)
+    // // var bounds = d3.geo.bounds(activeCountry)
+
+    // //       x-max          x-min
+    // var w  = bounds[1][0] - bounds[0][0];
+
+    // //       y-max          y-min
+    // var h = bounds[1][1] - bounds[0][1];
+
+    // console.log({
+    //   bounds, w, h,
+    //   pathCentroid: path.centroid(activeCountry),
+    // })
+  }
+
+
+  /*
+
+    Utils
+
+  */
 
   function debounce(fn){
     var timeout
     return function(){
       if(timeout) clearTimeout(timeout)
-      setTimeout(fn, 250)
+      timeout = setTimeout(fn, 250)
     }
   }
 
-  /*HERE*/
-  function colorCountry(country) {
-    if (country.id == countryCode) {
-      return '#FF0000';
-    } else {
-      return '#717171';
-    }
+  function easeInOutQuad(t, b, c, d) {
+    if ((t/=d/2) < 1) return c/2*t*t + b;
+    return -c/2 * ((--t)*(t-2) - 1) + b;
   }
 
-  d3.select(self.frameElement).style("height", height + "px");
+  function easeInOutQuart(t, b, c, d) {
+    if ((t/=d/2) < 1) return c/2*t*t*t*t + b;
+    return -c/2 * ((t-=2)*t*t*t - 2) + b;
+  }
 
 }
 
