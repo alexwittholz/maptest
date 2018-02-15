@@ -16,11 +16,11 @@ body {
   fill: #fff;
 }
 
-/*.graticule {
+.graticule {
   fill: none;
   stroke: #777;
   stroke-width: .5px;
-  stroke-opacity: .1;*/
+  stroke-opacity: .1;
 }
 
 .land {
@@ -47,6 +47,12 @@ var countryCode = 840;   //36: AUSTRALIA * 643: RUSSIA * 76: BRAZIL * 840: USA
 
 // var color = d3.scale.category10();
 
+// var projection = d3.geo.orthographic()
+//     .scale(240)
+//     .translate([width / 2, height / 2])
+//     .clipAngle(90)
+//     .precision(.1);
+
 var projection = d3.geo.mercator()
     .scale(140)
     .translate([width / 2, height / 2])
@@ -61,14 +67,14 @@ var svg = d3.select("body").append("svg")
     .attr("width", width)
     .attr("height", height);
 
-svg.append("defs").append("path")
-    .datum({type: "Sphere"})
-    .attr("id", "sphere")
-    .attr("d", path);
+// svg.append("defs").append("path")
+//     .datum({type: "Sphere"})
+//     .attr("id", "sphere")
+//     .attr("d", path);
 
-svg.append("use")
-    .attr("class", "stroke")
-    .attr("xlink:href", "#sphere");
+// svg.append("use")
+//     .attr("class", "stroke")
+//     .attr("xlink:href", "#sphere");
 
 svg.append("use")
     .attr("class", "fill")
@@ -96,9 +102,6 @@ d3.json("world-50m.json", function(error, world) {
                 .attr("class", "boundary")
                 .attr("d", path);
 
-        console.log("value : " + countries[99].id);
-        console.log("value : " + countries[12].id);
-        console.log("value : " + countries[108].color);
 
     });
 
