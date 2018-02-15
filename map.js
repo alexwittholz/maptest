@@ -5,68 +5,132 @@ var TimelineMap = function(container){
   var width = 960
   var height = 580
 
-  var countryCode = 840;   //36: AUSTRALIA * 643: RUSSIA * 76: BRAZIL * 840: USA
+  var countryCode = 840 //36: AUSTRALIA * 643: RUSSIA * 76: BRAZIL * 840: USA
 
-  // var color = d3.scale.category10();
+  // ********************************************************
 
-  // var projection = d3.geo.orthographic()
-  //     .scale(240)
-  //     .translate([width / 2, height / 2])
-  //     .clipAngle(90)
-  //     .precision(.1);
+  var activeProjection = 'orthographic'
 
-  var projection = d3.geo.mercator()
-    .scale(140)
-    .translate([width / 2, height / 2])
-    .precision(.1);
+  var svg, projectedPath, graticule
+  var world, countries, boundaries
+  var countryData, neighbourData
 
-  var path = d3.geo.path()
-    .projection(projection);
+  setup()
 
-  var graticule = d3.geo.graticule();
+  // ********************************************************
 
-  var svg = d3.select(container).append("svg")
-    .attr("width", width)
-    .attr("height", height);
+  function setup(){
 
-  // svg.append("defs").append("path")
-  //     .datum({type: "Sphere"})
-  //     .attr("id", "sphere")
-  //     .attr("d", path);
+    d3.json("world-50m.json", function(error, _world) {
+      if(error) throw error;
 
-  // svg.append("use")
-  //     .attr("class", "stroke")
-  //     .attr("xlink:href", "#sphere");
+      world = _world
 
-  svg.append("use")
-    .attr("class", "fill")
-    .attr("xlink:href", "#sphere");
+      countryData   = topojson.feature(world, world.objects.countries).features
+      neighbourData = topojson.neighbors(world.objects.countries.geometries)
 
-  svg.append("path")
-    .datum(graticule)
-    .attr("class", "graticule")
-    .attr("d", path);
+      svg = d3.select(container).append("svg")
 
-  d3.json("world-50m.json", function(error, world) {
-    if (error) throw error;
+      svg.append("use")
+        .attr("class", "fill")
+        .attr("xlink:href", "#sphere")
 
-    var countries = topojson.feature(world, world.objects.countries).features,
-          neighbors = topojson.neighbors(world.objects.countries.geometries);
+      // Countries
+      allCountries = svg.append('g')
+        .attr('class', 'countries')
 
-    svg.selectAll(".country")
-        .data(countries)
-        .enter().insert("path", ".graticule")
-        .attr("class", "country")
-        .attr("d", path)
-        .style("fill", colorCountry);
+      countries = allCountries.selectAll(".country")
+        .data(countryData)
 
-    svg.insert("path", ".graticule")
+      countries
+        .enter()
+          .append('path')
+          .attr("class", "country")
+
+      // Boundaries & Graticule
+      var boundaryGroup = svg.append('g')
+        .attr('class', 'boundary')
+
+      graticule = boundaryGroup.append("path")
+        .attr("class", "graticule")
+        .datum( d3.geo.graticule() )
+
+      boundaries = boundaryGroup.insert("path", ".graticule")
         .datum(topojson.mesh(world, world.objects.countries, function(a, b) { return a !== b; }))
         .attr("class", "boundary")
-        .attr("d", path);
 
+      window.addEventListener('resize', debounce(resize), false)
+      resize()
 
-  });
+    })
+
+  }
+
+  /*
+
+    set/update active projection and globe position
+
+  */
+  function drawProjection(){
+
+    projectedPath = d3.geo.path()
+      .projection(buildProjection(activeProjection))
+
+    countries.data(countryData)
+      .style("fill", colorCountry)
+      .attr("d", projectedPath)
+
+    graticule
+      .attr("d", projectedPath)
+
+    boundaries
+      .attr("d", projectedPath)
+
+  }
+
+  function buildProjection(type){
+
+    if( type === 'orthographic' ){
+
+      return d3.geo.orthographic()
+        .scale(240)
+        .translate([width / 2, height / 2])
+        .clipAngle(90)
+        .precision(.1)
+
+    } else if( type === 'mercator' ){
+
+      return d3.geo.mercator()
+        .scale(140)
+        .translate([width / 2, height / 2])
+        .precision(.1);
+
+    }
+
+  }
+
+  function update(){
+
+  }
+
+  function resize(){
+    width  = container.offsetWidth
+    height = container.offsetHeight
+
+    svg.attr("width", width)
+       .attr("height", height)
+
+    if(world)
+      drawProjection()
+  }
+
+  function debounce(fn){
+    var timeout
+    return function(){
+      if(timeout) clearTimeout(timeout)
+      setTimeout(fn, 250)
+    }
+  }
 
   /*HERE*/
   function colorCountry(country) {
